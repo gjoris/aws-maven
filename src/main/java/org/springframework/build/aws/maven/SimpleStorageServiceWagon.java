@@ -18,10 +18,13 @@ package org.springframework.build.aws.maven;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.internal.Mimetypes;
 import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import org.apache.maven.wagon.ResourceDoesNotExistException;
 import org.apache.maven.wagon.TransferFailedException;
 import org.apache.maven.wagon.authentication.AuthenticationException;
@@ -82,9 +85,18 @@ public final class SimpleStorageServiceWagon extends AbstractWagon {
             this.bucketName = S3Utils.getBucketName(repository);
             this.baseDirectory = S3Utils.getBaseDirectory(repository);
 
-            this.amazonS3 = new AmazonS3Client(credentialsProvider, clientConfiguration);
-            Region region = Region.fromLocationConstraint(this.amazonS3.getBucketLocation(this.bucketName));
-            this.amazonS3.setEndpoint(region.getEndpoint());
+            STSAssumeRoleSessionCredentialsProvider.Builder builder = new STSAssumeRoleSessionCredentialsProvider.Builder("arn:aws:iam::075770544740:role/service-role/codebuild-service-role", "codebuild-service-role");
+            builder.withStsClient(AWSSecurityTokenServiceClient.builder().withCredentials(credentialsProvider).build());
+
+            STSAssumeRoleSessionCredentialsProvider assumeRoleSessionCredentialsProvider = builder.build();
+
+            AmazonS3ClientBuilder s3ClientBuilder = AmazonS3Client.builder();
+            s3ClientBuilder.setCredentials(assumeRoleSessionCredentialsProvider);
+            s3ClientBuilder.setClientConfiguration(clientConfiguration);
+//            Region region = Region.fromLocationConstraint(AmazonS3Client.builder().build().getBucketLocation(this.bucketName));
+//            s3ClientBuilder.setRegion(region.getEndpoint());
+
+            this.amazonS3 = s3ClientBuilder.build();
         }
     }
 
